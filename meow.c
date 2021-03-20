@@ -18,19 +18,29 @@ void emit(int fd, int type, int code, int val)
    write(fd, &ie, sizeof(ie));
 }
 
+void type(int fd, int code)
+{
+   emit(fd, EV_KEY, code, 1);
+   emit(fd, EV_SYN, SYN_REPORT, 0);
+   emit(fd, EV_KEY, code, 0);
+   emit(fd, EV_SYN, SYN_REPORT, 0);
+} 
+
 int main(void)
 {
    struct uinput_setup usetup;
 
    int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-
+   int rfd = open("/dev/input/event2", O_RDONLY  | O_NONBLOCK );
 
    /*
     * The ioctls below will enable the device that is about to be
     * created, to pass key events, in this case the space key.
     */
+    int keys[] = {KEY_M, KEY_E, KEY_O, KEY_W};
    ioctl(fd, UI_SET_EVBIT, EV_KEY);
    ioctl(fd, UI_SET_KEYBIT, KEY_SPACE);
+   for(int i = 0; i < 4; i++) ioctl(fd, UI_SET_KEYBIT, keys[i]);            
 
    memset(&usetup, 0, sizeof(usetup));
    usetup.id.bustype = BUS_USB;
@@ -50,12 +60,17 @@ int main(void)
     */
    sleep(1);
 
+struct input_event ie;
    /* Key press, report the event, send key release, and report again */
-   emit(fd, EV_KEY, KEY_SPACE, 1);
-   emit(fd, EV_SYN, SYN_REPORT, 0);
-   emit(fd, EV_KEY, KEY_SPACE, 0);
-   emit(fd, EV_SYN, SYN_REPORT, 0);
+   while(1) {
+	   if (read(rfd, &ie, sizeof(struct input_event)) <= 0) {
+	    usleep(100000);
+	    continue;
+	   }
+	  	printf("KEY %d\n", ie.code);
+   }
 
+   for(int i = 0; i < 4; i++) type(fd, keys[i]);
    /*
     * Give userspace some time to read the events before we destroy the
     * device with UI_DEV_DESTOY.
