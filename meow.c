@@ -59,6 +59,8 @@ int main(void)
     * to send. This pause is only needed in our example code!
     */
    sleep(1);
+   
+   ioctl(rfd, EVIOCGRAB, (void*)1);
 
 struct input_event ie;
    /* Key press, report the event, send key release, and report again */
@@ -67,9 +69,12 @@ struct input_event ie;
 	    usleep(100000);
 	    continue;
 	   }
-	  	printf("KEY %d\n", ie.code);
-	  	usleep(1000000);
-	  	type(fd, ie.code + 1);
+	  	//printf("KEY %d\n", ie.code);
+	  	//usleep(1000000);
+	  	//type(fd, ie.code);
+	  	emit(fd, ie.type, ie.code, ie.value);
+	  		 
+	 if(ie.code == KEY_G) ioctl(rfd, EVIOCGRAB, (void*)0);
    }
 
    for(int i = 0; i < 4; i++) type(fd, keys[i]);
