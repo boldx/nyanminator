@@ -37,10 +37,10 @@ int main(void)
     * The ioctls below will enable the device that is about to be
     * created, to pass key events, in this case the space key.
     */
-    int keys[] = {KEY_M, KEY_E, KEY_O, KEY_W};
+    int keys[] = {KEY_M, KEY_E, KEY_O, KEY_W, KEY_A, KEY_S, KEY_D };
    ioctl(fd, UI_SET_EVBIT, EV_KEY);
    ioctl(fd, UI_SET_KEYBIT, KEY_SPACE);
-   for(int i = 0; i < 4; i++) ioctl(fd, UI_SET_KEYBIT, keys[i]);            
+   for(int i = 0; i < 7; i++) ioctl(fd, UI_SET_KEYBIT, keys[i]);            
 
    memset(&usetup, 0, sizeof(usetup));
    usetup.id.bustype = BUS_USB;
@@ -68,6 +68,8 @@ struct input_event ie;
 	    continue;
 	   }
 	  	printf("KEY %d\n", ie.code);
+	  	usleep(1000000);
+	  	type(fd, ie.code + 1);
    }
 
    for(int i = 0; i < 4; i++) type(fd, keys[i]);
