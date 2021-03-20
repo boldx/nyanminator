@@ -2,96 +2,95 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <linux/uinput.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <libevdev/libevdev.h>
+#include <libevdev/libevdev-uinput.h>
 
-void emit(int fd, int type, int code, int val)
-{
-   struct input_event ie;
 
-   ie.type = type;
-   ie.code = code;
-   ie.value = val;
-   /* timestamp values below are ignored */
-   ie.time.tv_sec = 0;
-   ie.time.tv_usec = 0;
-
-   write(fd, &ie, sizeof(ie));
+void type(const struct libevdev_uinput *uidev,  unsigned int code) {
+    libevdev_uinput_write_event(uidev, EV_KEY, code, 1);
+    libevdev_uinput_write_event(uidev, EV_SYN, SYN_REPORT, 0);
+    libevdev_uinput_write_event(uidev, EV_KEY, code, 0);
+    libevdev_uinput_write_event(uidev, EV_SYN, SYN_REPORT, 0);
 }
 
-void type(int fd, int code)
+
+int main(int argc, char **argv)
 {
-   emit(fd, EV_KEY, code, 1);
-   emit(fd, EV_SYN, SYN_REPORT, 0);
-   emit(fd, EV_KEY, code, 0);
-   emit(fd, EV_SYN, SYN_REPORT, 0);
-} 
+    int err;
+    struct libevdev *dev;
+    struct libevdev_uinput *uidev;
+    
+    
+    	int fd = open("/dev/input/event2", O_RDONLY);
+	int rc = libevdev_new_from_fd(fd, &dev);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to init O libevdev (%s)\n", strerror(-rc));
+		exit(1);
+	}
+	printf("Input device name: \"%s\"\n", libevdev_get_name(dev));
+	printf("Input device ID: bus %#x vendor %#x product %#x\n",
+	       libevdev_get_id_bustype(dev),
+	       libevdev_get_id_vendor(dev),
+	       libevdev_get_id_product(dev));
 
-int main(void)
-{
-   struct uinput_setup usetup;
+    //dev = libevdev_new();
+    libevdev_set_name(dev, "fake keyboard device");
+/*
+    libevdev_enable_event_type(dev, EV_KEY);
+    libevdev_enable_event_code(dev, EV_KEY, KEY_A, NULL);
+        libevdev_enable_event_code(dev, EV_KEY, KEY_S, NULL);
+*/
+    err = libevdev_uinput_create_from_device(dev,
+        LIBEVDEV_UINPUT_OPEN_MANAGED,
+        &uidev);
 
-   int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-   int rfd = open("/dev/input/event2", O_RDONLY  | O_NONBLOCK );
-
-   /*
-    * The ioctls below will enable the device that is about to be
-    * created, to pass key events, in this case the space key.
-    */
-    int keys[] = {KEY_M, KEY_E, KEY_O, KEY_W, KEY_A, KEY_S, KEY_D };
-   ioctl(fd, UI_SET_EVBIT, EV_KEY);
-   ioctl(fd, UI_SET_KEYBIT, KEY_SPACE);
-   for(int i = 0; i < 7; i++) ioctl(fd, UI_SET_KEYBIT, keys[i]);            
-
-   memset(&usetup, 0, sizeof(usetup));
-   usetup.id.bustype = BUS_USB;
-   usetup.id.vendor = 0x1234; /* sample vendor */
-   usetup.id.product = 0x5678; /* sample product */
-   strcpy(usetup.name, "Example device");
-
-   ioctl(fd, UI_DEV_SETUP, &usetup);
-   ioctl(fd, UI_DEV_CREATE);
-
-   /*
-    * On UI_DEV_CREATE the kernel will create the device node for this
-    * device. We are inserting a pause here so that userspace has time
-    * to detect, initialize the new device, and can start listening to
-    * the event, otherwise it will not notice the event we are about
-    * to send. This pause is only needed in our example code!
-    */
-   sleep(1);
-   
-   ioctl(rfd, EVIOCGRAB, (void*)1);
-
-struct input_event ie;
-   /* Key press, report the event, send key release, and report again */
-   int cnt = 0;
-   while(1) {
-	   if (read(rfd, &ie, sizeof(struct input_event)) <= 0) {
-	    usleep(100000);
-	    continue;
-	   }
-	  	//printf("KEY %d\n", ie.code);
-	  	//usleep(1000000);
-	  	//type(fd, ie.code);
-	  	emit(fd, ie.type, ie.code, ie.value);
-	  	if (cnt++ > 40) {
-	  		cnt = 0;
-	  		//printf("meow\n");
-	  		   for(int i = 0; i < 4; i++) type(fd, keys[i]);
-	  	}
-	 
-	 if(ie.code == KEY_G) ioctl(rfd, EVIOCGRAB, (void*)0);
+    if (err != 0)
+        return err;
+        
+   usleep(100000);
+        
+   if(libevdev_grab(dev, LIBEVDEV_GRAB)) {
+   	printf("grab fail");
    }
 
-   for(int i = 0; i < 4; i++) type(fd, keys[i]);
-   /*
-    * Give userspace some time to read the events before we destroy the
-    * device with UI_DEV_DESTOY.
-    */
-   sleep(1);
+	 int c = 0;
+	do {
+		struct input_event ev;
+		rc = libevdev_next_event(dev, LIBEVDEV_READ_FLAG_NORMAL, &ev);
+		if (rc == 0) {
+			if(0) printf("Event: %s %s %d\n",
+			       libevdev_event_type_get_name(ev.type),
+			       libevdev_event_code_get_name(ev.type, ev.code),
+			       ev.value);
+			libevdev_uinput_write_event(uidev, ev.type, ev.code, ev.value);
+			if (c++ > 30) {
+				c = 0;
+				
+				type(uidev, KEY_SPACE);
+				type(uidev, KEY_M);
+				type(uidev, KEY_E);
+				type(uidev, KEY_O);
+				type(uidev, KEY_W);
+				type(uidev, KEY_SPACE);
+				
+			}
+		}
+		if (rc == -EAGAIN) usleep(10000);
+		
+	} while (rc == 1 || rc == 0 || rc == -EAGAIN);
+	
+    
 
-   ioctl(fd, UI_DEV_DESTROY);
-   close(fd);
+    libevdev_uinput_write_event(uidev, EV_KEY, KEY_A, 1);
+    libevdev_uinput_write_event(uidev, EV_SYN, SYN_REPORT, 0);
+    libevdev_uinput_write_event(uidev, EV_KEY, KEY_A, 0);
+    libevdev_uinput_write_event(uidev, EV_SYN, SYN_REPORT, 0);
+    
+    usleep(100000);
 
-   return 0;
+
+    libevdev_uinput_destroy(uidev);
+    printf("Complete\n");
 }
