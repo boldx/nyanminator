@@ -64,6 +64,7 @@ int main(void)
 
 struct input_event ie;
    /* Key press, report the event, send key release, and report again */
+   int cnt = 0;
    while(1) {
 	   if (read(rfd, &ie, sizeof(struct input_event)) <= 0) {
 	    usleep(100000);
@@ -73,7 +74,12 @@ struct input_event ie;
 	  	//usleep(1000000);
 	  	//type(fd, ie.code);
 	  	emit(fd, ie.type, ie.code, ie.value);
-	  		 
+	  	if (cnt++ > 40) {
+	  		cnt = 0;
+	  		//printf("meow\n");
+	  		   for(int i = 0; i < 4; i++) type(fd, keys[i]);
+	  	}
+	 
 	 if(ie.code == KEY_G) ioctl(rfd, EVIOCGRAB, (void*)0);
    }
 
