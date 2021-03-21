@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -7,8 +9,89 @@
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
 
+#include <linux/version.h>
+#include <linux/input.h>
 
-void type(const struct libevdev_uinput *uidev,  unsigned int code) {
+#include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <dirent.h>
+#include <errno.h>
+#include <getopt.h>
+#include <ctype.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#define DEV_INPUT_EVENT "/dev/input"
+#define EVENT_DEV_NAME "event"
+
+
+static int is_event_device(const struct dirent *dir)
+{
+	return strncmp(EVENT_DEV_NAME, dir->d_name, sizeof(EVENT_DEV_NAME) - 1) == 0;
+}
+
+
+static int find_keyboard_event_file(char *evfname, size_t evfname_len)
+{
+	struct dirent **namelist;
+	int ndev = scandir(DEV_INPUT_EVENT, &namelist, is_event_device, versionsort);
+	if (ndev <= 0) {
+		return -1;
+	}
+	
+	int highscore = 0;
+	for (int i = 0; i < ndev; i++)
+	{
+		char fname[256];
+		if(snprintf(fname, sizeof(fname), "%s/%s", DEV_INPUT_EVENT, namelist[i]->d_name) >= sizeof(fname)) {
+			continue;
+		}
+		
+		int fd = open(fname, O_RDONLY);
+		if (fd < 0) {
+			continue;
+		}
+		
+		struct libevdev *dev = NULL;
+		if (libevdev_new_from_fd(fd, &dev) < 0) {
+			goto release;
+		}
+		
+		if (!libevdev_has_event_type(dev, EV_KEY)) {
+			goto release;
+		}
+		
+		unsigned int c, score = 0;
+		for (c = 0; c <= KEY_MAX; c++) {
+			if (libevdev_has_event_code(dev, EV_KEY, c)) score++;
+		}
+		
+		if (strstr(libevdev_get_name(dev), "keyboard")) {
+			score += 1000;
+		}
+		
+		if (score > highscore && strlen(evfname) < evfname_len) {
+			highscore = score;
+			snprintf(evfname, evfname_len, "%s", fname);
+		}
+		
+		release:
+			libevdev_free(dev);
+			close(fd);			
+			free(namelist[i]);
+	}
+	
+	return (highscore > 0) ? 0 : -2;
+}
+
+
+static void type_key(const struct libevdev_uinput *uidev,  unsigned int code) {
     libevdev_uinput_write_event(uidev, EV_KEY, code, 1);
     libevdev_uinput_write_event(uidev, EV_SYN, SYN_REPORT, 0);
     libevdev_uinput_write_event(uidev, EV_KEY, code, 0);
@@ -22,6 +105,10 @@ int main(int argc, char **argv)
     struct libevdev *dev;
     struct libevdev_uinput *uidev;
     
+    char fname[256]; 
+    find_keyboard_event_file(fname, sizeof(fname));
+    printf("%s", fname);
+    //return 0;
     
     	int fd = open("/dev/input/event2", O_RDONLY);
 	int rc = libevdev_new_from_fd(fd, &dev);
@@ -36,7 +123,7 @@ int main(int argc, char **argv)
 	       libevdev_get_id_product(dev));
 
     //dev = libevdev_new();
-    libevdev_set_name(dev, "fake keyboard device");
+    //libevdev_set_name(dev, "fake keyboard device");
 /*
     libevdev_enable_event_type(dev, EV_KEY);
     libevdev_enable_event_code(dev, EV_KEY, KEY_A, NULL);
@@ -68,13 +155,12 @@ int main(int argc, char **argv)
 			if (c++ > 30) {
 				c = 0;
 				
-				type(uidev, KEY_SPACE);
-				type(uidev, KEY_M);
-				type(uidev, KEY_E);
-				type(uidev, KEY_O);
-				type(uidev, KEY_W);
-				type(uidev, KEY_SPACE);
-				
+				type_key(uidev, KEY_SPACE);
+				type_key(uidev, KEY_M);
+				type_key(uidev, KEY_E);
+				type_key(uidev, KEY_O);
+				type_key(uidev, KEY_W);
+				type_key(uidev, KEY_SPACE);
 			}
 		}
 		if (rc == -EAGAIN) usleep(10000);
