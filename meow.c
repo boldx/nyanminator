@@ -7,11 +7,28 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <dirent.h>
+#include <time.h>
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
 
+#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+
 #define DEV_INPUT_EVENT "/dev/input"
 #define EVENT_DEV_NAME "event"
+
+struct key_seq {
+	size_t len;
+	int seq[8];
+};
+
+
+struct key_seq meow_seqs[] = {
+	{.len = 3, .seq = {KEY_N, KEY_Y, KEY_A}},
+	{.len = 5, .seq = {KEY_M, KEY_E, KEY_O, KEY_W}}
+};
+
+
+struct key_seq mode_switch_seq = {.len = 3, .seq = {KEY_N, KEY_Y, KEY_A}};
 
 
 static int is_event_device(const struct dirent *dir)
@@ -85,49 +102,52 @@ static void type_key(const struct libevdev_uinput *uidev,  unsigned int code) {
 struct buff {
 	int *buff;
 	int tail;
-	size_t size;
+	size_t len;
 }; 
 
 
-static int buff_init(struct buff* buff, size_t size)
+static int buff_init(struct buff *buff, size_t len)
 {
-	if ((size & (size - 1)) != 0) {
+	if ((len & (len - 1)) != 0) {
 		return 1;
 	}
-	buff->buff = calloc(size, sizeof(*buff->buff));
+	buff->buff = calloc(len, sizeof(*buff->buff));
 	if (buff->buff == NULL) {
 		return 2;
 	}
-	buff->size = size;
+	buff->tail = 0;
+	buff->len = len;
 	return 0;
 }
 
 
-static void buff_free(struct buff* buff)
+/*
+static void buff_free(struct buff *buff)
 {
-	buff->size = 0;
+	buff->len = 0;
 	if (buff->buff == NULL) {
 		return;
 	}
 	free(buff->buff);
 }
+*/
 
 
-static void buff_put(struct buff* buff, int ent)
+static void buff_put(struct buff *buff, int ent)
 {
 	buff->buff[buff->tail] = ent;
-	buff->tail = (buff->tail + 1) & (buff->size - 1);
+	buff->tail = (buff->tail + 1) & (buff->len - 1);
 }
 
 
-static int buff_endswith(struct buff* buff, int *pattern, size_t pattern_len)
+static int buff_endswith(struct buff *buff, int *pattern, size_t pattern_len)
 {
-	if (pattern_len > buff->size) {
+	if (pattern_len > buff->len) {
 		return 0;
 	}
 	int i;
 	for(i = 0; i < pattern_len; i++) {
-		int act = buff->buff[(buff->tail - i - 1 + buff->size) & (buff->size - 1)];
+		int act = buff->buff[(buff->tail - i - 1 + buff->len) & (buff->len - 1)];
 		int exp = pattern[pattern_len - i - 1];
 		if (act != exp) {
 			break;
@@ -137,29 +157,80 @@ static int buff_endswith(struct buff* buff, int *pattern, size_t pattern_len)
 }
 
 
+static int next_threshold(int threshold) 
+{
+	switch(threshold) {
+		case 0:
+			threshold = 34;
+			break;
+		case 34:
+			threshold = 55;
+			break;
+		case 55:
+			threshold = 89;
+			break;
+		default:
+			threshold = 256 + rand() % 256;	
+	}
+	return threshold;
+}
+
+
+
+static void do_meow(struct libevdev_uinput *dstdev)
+{
+	struct key_seq seq = meow_seqs[rand() % COUNT_OF(meow_seqs)];
+	for(int i = 0; i < seq.len; i++) {
+		type_key(dstdev, seq.seq[i]);
+	}
+}
+
+
 static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *dstdev)
 {
+	static int mode, cnt, threshold;
 	static struct buff buff;
-	static int nya[] = {KEY_N, KEY_Y, KEY_A};
+
 	if (buff.buff == NULL) {
 		printf("int buff\n");
 		buff_init(&buff, 8);
 	}
-	if (ev->type == EV_KEY && ev->value == 1) {
+	
+	if (ev->type == EV_KEY && ev->value > 0) {
 		buff_put(&buff, ev->code);
+		cnt++;
 	}
-	if (ev->type == EV_KEY && ev->value == 0 && buff_endswith(&buff, nya, 3)) {
-		printf("meow\n");
+	
+	if (mode == 0 && cnt >= threshold && ev->type == EV_KEY && ev->code == KEY_SPACE && ev->value != 1) {
+		do_meow(dstdev);
+		cnt = 0;
+		threshold = next_threshold(threshold);
+	} else if (mode == 1 && ev->type == EV_KEY && ev->value != 1) {
+		do_meow(dstdev);
+		type_key(dstdev, KEY_SPACE);
+	}
+	
+	if (ev->type == EV_KEY && ev->value == 0 && buff_endswith(&buff, mode_switch_seq.seq, mode_switch_seq.len)) {
+		libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
+		libevdev_uinput_write_event(dstdev, EV_SYN, SYN_REPORT, 0);
+		mode ^= 1;
+		threshold = 0;
 	}
 
-	return libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
+	if (mode == 0) {
+		libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
+	}
+	
+	return 0;
 }
 
 
 int main(int argc, char **argv)
 {
+	srand(time(NULL)); 
+	
 	int rc;
-	char fname[256]; 
+	char fname[256];
 	rc = find_keyboard_event_file(fname, sizeof(fname));
 	if (rc) {
 		fprintf(stderr, "Failed to find a keyboard\n");
