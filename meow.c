@@ -120,7 +120,7 @@ static void buff_put(struct buff* buff, int ent)
 }
 
 
-static int buff_endswith(struct buff* buff, int pattern[], size_t pattern_len)
+static int buff_endswith(struct buff* buff, int *pattern, size_t pattern_len)
 {
 	if (pattern_len > buff->size) {
 		return 0;
@@ -140,10 +140,18 @@ static int buff_endswith(struct buff* buff, int pattern[], size_t pattern_len)
 static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *dstdev)
 {
 	static struct buff buff;
+	static int nya[] = {KEY_N, KEY_Y, KEY_A};
 	if (buff.buff == NULL) {
 		printf("int buff\n");
 		buff_init(&buff, 8);
 	}
+	if (ev->type == EV_KEY && ev->value == 1) {
+		buff_put(&buff, ev->code);
+	}
+	if (ev->type == EV_KEY && ev->value == 0 && buff_endswith(&buff, nya, 3)) {
+		printf("meow\n");
+	}
+
 	return libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
 }
 
