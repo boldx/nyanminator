@@ -6,26 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <dirent.h>
 #include <libevdev/libevdev.h>
 #include <libevdev/libevdev-uinput.h>
-
-#include <linux/version.h>
-#include <linux/input.h>
-
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <dirent.h>
-#include <errno.h>
-#include <getopt.h>
-#include <ctype.h>
-#include <signal.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #define DEV_INPUT_EVENT "/dev/input"
 #define EVENT_DEV_NAME "event"
