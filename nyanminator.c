@@ -1,4 +1,11 @@
-#define _GNU_SOURCE
+/*
+                                   _             _             
+ _ __  _   _  __ _ _ __  _ __ ___ (_)_ __   __ _| |_ ___  _ __ 
+| '_ \| | | |/ _` | '_ \| '_ ` _ \| | '_ \ / _` | __/ _ \| '__|
+| | | | |_| | (_| | | | | | | | | | | | | | (_| | || (_) | |   
+|_| |_|\__, |\__,_|_| |_|_| |_| |_|_|_| |_|\__,_|\__\___/|_|   
+       |___/  
+*/
 
 #include <string.h>
 #include <unistd.h>
@@ -15,6 +22,7 @@
 
 #define DEV_INPUT_EVENT "/dev/input"
 #define EVENT_DEV_NAME "event"
+
 
 struct key_seq {
 	size_t len;
@@ -40,7 +48,7 @@ static int is_event_device(const struct dirent *dir)
 static int find_keyboard_event_file(char *evfname, size_t evfname_len)
 {
 	struct dirent **namelist;
-	int ndev = scandir(DEV_INPUT_EVENT, &namelist, is_event_device, versionsort);
+	int ndev = scandir(DEV_INPUT_EVENT, &namelist, is_event_device, NULL);
 	if (ndev <= 0) {
 		return 1;
 	}
@@ -193,7 +201,6 @@ static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *ds
 	static struct buff buff;
 
 	if (buff.buff == NULL) {
-		printf("int buff\n");
 		buff_init(&buff, 8);
 	}
 	
@@ -274,7 +281,7 @@ int main(int argc, char **argv)
 	} while (rc == LIBEVDEV_READ_STATUS_SYNC || rc == LIBEVDEV_READ_STATUS_SUCCESS || rc == -EAGAIN);
 	
 	printf("OK, byee!");
-	rc = 0;
+
 out3:
 	libevdev_uinput_destroy(dstdev);
 	libevdev_grab(srcdev, LIBEVDEV_UNGRAB);
