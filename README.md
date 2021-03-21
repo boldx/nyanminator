@@ -1,7 +1,7 @@
 Nyanminator
 ===
 
-This is a program that occasionally meows at you while you typing on your keyboard.
+This is a program that occasionally meows at you as you type on your keyboard.
 
 
 Inspiration
