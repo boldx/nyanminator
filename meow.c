@@ -82,12 +82,78 @@ static void type_key(const struct libevdev_uinput *uidev,  unsigned int code) {
 }
 
 
+struct buff {
+	int *buff;
+	int tail;
+	size_t size;
+}; 
+
+
+static int buff_init(struct buff* buff, size_t size)
+{
+	if ((size & (size - 1)) != 0) {
+		return 1;
+	}
+	buff->buff = calloc(size, sizeof(*buff->buff));
+	if (buff->buff == NULL) {
+		return 2;
+	}
+	buff->size = size;
+	return 0;
+}
+
+
+static void buff_free(struct buff* buff)
+{
+	buff->size = 0;
+	if (buff->buff == NULL) {
+		return;
+	}
+	free(buff->buff);
+}
+
+
+static void buff_put(struct buff* buff, int ent)
+{
+	buff->buff[buff->tail] = ent;
+	buff->tail = (buff->tail + 1) & (buff->size - 1);
+}
+
+
+static int buff_endswith(struct buff* buff, int pattern[], size_t pattern_len)
+{
+	if (pattern_len > buff->size) {
+		return 0;
+	}
+	int i;
+	for(i = 0; i < pattern_len; i++) {
+		int act = buff->buff[(buff->tail - i - 1 + buff->size) & (buff->size - 1)];
+		int exp = pattern[pattern_len - i - 1];
+		if (act != exp) {
+			break;
+		}
+	}
+	return i == pattern_len;
+}
+
+
+static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *dstdev)
+{
+	static struct buff buff;
+	if (buff.buff == NULL) {
+		printf("int buff\n");
+		buff_init(&buff, 8);
+	}
+	return libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
+}
+
+
 int main(int argc, char **argv)
 {
 	int rc;
 	char fname[256]; 
 	rc = find_keyboard_event_file(fname, sizeof(fname));
-	if(rc) {
+	if (rc) {
 		fprintf(stderr, "Failed to find a keyboard\n");
 		goto out1;
 	}
@@ -125,7 +191,7 @@ int main(int argc, char **argv)
 		struct input_event ev;
 		rc = libevdev_next_event(srcdev, LIBEVDEV_READ_FLAG_NORMAL | LIBEVDEV_READ_FLAG_BLOCKING, &ev);
 		if (rc == LIBEVDEV_READ_STATUS_SUCCESS) {
-			libevdev_uinput_write_event(dstdev, ev.type, ev.code, ev.value);
+			handle_evdev_event(&ev, dstdev);
 		}
 	} while (rc == LIBEVDEV_READ_STATUS_SYNC || rc == LIBEVDEV_READ_STATUS_SUCCESS || rc == -EAGAIN);
 	
