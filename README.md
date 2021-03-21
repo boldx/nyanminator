@@ -46,18 +46,18 @@ This is a very naive Thing:
 - It fucks with the scan codes directry, if your keyboard layout is not QWERTY then it will not work properly.
 
 
- .／|、
-(ﾟ､ 。7
-︱ ︶ヽ
+ .／|、     \
+(ﾟ､ 。7     \
+︱ ︶ヽ     \
 _U U c )ノ
 
 
 References
 ---
-https://unix.stackexchange.com/questions/400744/how-to-proxy-key-presses
-https://www.kernel.org/doc/html/v4.12/input/uinput.html
-https://github.com/kernc/logkeys
-https://gitlab.freedesktop.org/libevdev/libevdev
-https://gitlab.freedesktop.org/libevdev/evtest
+https://unix.stackexchange.com/questions/400744/how-to-proxy-key-presses \
+https://www.kernel.org/doc/html/v4.12/input/uinput.html \
+https://github.com/kernc/logkeys \
+https://gitlab.freedesktop.org/libevdev/libevdev \
+https://gitlab.freedesktop.org/libevdev/evtest \
 https://www.youtube.com/watch?v=cjoJh1LBe68
 
