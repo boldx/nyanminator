@@ -121,7 +121,7 @@ static int buff_init(struct buff *buff, size_t len)
 }
 
 
-/*
+
 static void buff_free(struct buff *buff)
 {
 	buff->len = 0;
@@ -130,7 +130,7 @@ static void buff_free(struct buff *buff)
 	}
 	free(buff->buff);
 }
-*/
+
 
 
 static void buff_put(struct buff *buff, int ent)
@@ -183,6 +183,7 @@ static void do_meow(struct libevdev_uinput *dstdev)
 	for(int i = 0; i < seq.len; i++) {
 		type_key(dstdev, seq.seq[i]);
 	}
+	type_key(dstdev, KEY_SPACE);
 }
 
 
@@ -202,12 +203,14 @@ static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *ds
 	}
 	
 	if (mode == 0 && cnt >= threshold && ev->type == EV_KEY && ev->code == KEY_SPACE && ev->value != 1) {
+		libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
 		do_meow(dstdev);
 		cnt = 0;
 		threshold = next_threshold(threshold);
 	} else if (mode == 1 && ev->type == EV_KEY && ev->value != 1) {
 		do_meow(dstdev);
-		type_key(dstdev, KEY_SPACE);
+	} else if (mode == 0) {
+		libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
 	}
 	
 	if (ev->type == EV_KEY && ev->value == 0 && buff_endswith(&buff, mode_switch_seq.seq, mode_switch_seq.len)) {
@@ -215,10 +218,6 @@ static int handle_evdev_event(struct input_event *ev, struct libevdev_uinput *ds
 		libevdev_uinput_write_event(dstdev, EV_SYN, SYN_REPORT, 0);
 		mode ^= 1;
 		threshold = 0;
-	}
-
-	if (mode == 0) {
-		libevdev_uinput_write_event(dstdev, ev->type, ev->code, ev->value);
 	}
 	
 	return 0;
